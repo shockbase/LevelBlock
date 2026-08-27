@@ -19,7 +19,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.util.Vector;
 
 import java.util.List;
 import java.util.UUID;
@@ -172,15 +171,6 @@ public final class MovementListener implements Listener {
         corrected.setX(collision.x());
         corrected.setZ(collision.z());
         event.setTo(corrected);
-
-        Vector velocity = player.getVelocity();
-        if (blockedX) {
-            velocity.setX(0.0D);
-        }
-        if (blockedZ) {
-            velocity.setZ(0.0D);
-        }
-        player.setVelocity(velocity);
 
         long now = System.currentTimeMillis();
         long last = lastDeniedMessage.getOrDefault(player.getUniqueId(), 0L);
