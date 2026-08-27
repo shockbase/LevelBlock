@@ -1,0 +1,24 @@
+name: LevelBlock
+version: '${version}'
+main: de.shockbase.levelblock.LevelBlockPlugin
+api-version: '26.2'
+description: Gemeinsam Level sammeln und damit die begehbare Welt blockweise erweitern.
+authors: [Shockbase]
+website: https://github.com/shockbase/LevelBlock
+
+commands:
+  levelblock:
+    description: Hauptbefehl fuer LevelBlock
+    usage: /levelblock <lobby|start|stop|invite|join|leave|info|list|delete>
+    aliases: [lb]
+    permission: levelblock.use
+
+permissions:
+  levelblock.use:
+    description: Erlaubt die normalen LevelBlock-Befehle.
+    default: true
+  levelblock.admin:
+    description: Erlaubt administrative LevelBlock-Befehle.
+    default: op
+    children:
+      levelblock.use: true
