@@ -175,6 +175,7 @@ public final class ClientBoundaryRenderer {
     ) {
         int y = level.getMinY() + 1;
         int maximum = level.getMaxY() - 1;
+        addAdjacentBlockFills(level, edge, tint, y, maximum);
         while (y <= maximum && displayIds.size() < MAX_DISPLAYS) {
             while (y <= maximum && !isBoundaryOpen(level, edge, y)) {
                 y++;
@@ -191,6 +192,45 @@ public final class ClientBoundaryRenderer {
         }
     }
 
+    private void addAdjacentBlockFills(
+            ClientLevel level,
+            Edge edge,
+            int tint,
+            int minimum,
+            int maximum
+    ) {
+        for (int y = minimum; y <= maximum && displayIds.size() < MAX_DISPLAYS; y++) {
+            boolean insideOpen = isOpen(level, edge.insideX(), y, edge.insideZ());
+            boolean outsideOpen = isOpen(level, edge.outsideX(), y, edge.outsideZ());
+            if (insideOpen == outsideOpen) {
+                continue;
+            }
+            boolean blockOutside = insideOpen;
+            int blockX = blockOutside ? edge.outsideX() : edge.insideX();
+            int blockZ = blockOutside ? edge.outsideZ() : edge.insideZ();
+            Direction visibleFace = blockOutside
+                    ? edge.worldDirection().getOpposite()
+                    : edge.worldDirection();
+            if (isRenderableBlockFace(level, blockX, y, blockZ, visibleFace)) {
+                spawn(level, edge, y, tint, ModelStyle.SOLID);
+            }
+        }
+    }
+
+    private static boolean isRenderableBlockFace(
+            ClientLevel level,
+            int x,
+            int y,
+            int z,
+            Direction visibleFace
+    ) {
+        BlockPos pos = new BlockPos(x, y, z);
+        var block = level.getBlockState(pos);
+        return !block.is(BlockTags.LEAVES)
+                && !block.is(BlockTags.LOGS)
+                && block.isFaceSturdy(level, pos, visibleFace);
+    }
+
     private void spawnOpenLayer(ClientLevel level, Edge edge, int startY, int endY, int tint) {
         boolean hasGround = hasGround(level, edge, startY);
         boolean hasOverhang = hasOverhang(level, edge, endY);
@@ -203,11 +243,6 @@ public final class ClientBoundaryRenderer {
         }
         if (hasGround) {
             spawn(level, edge, startY, tint, ModelStyle.FADE_UP);
-        }
-        if (hasGround && hasOverhang) {
-            for (int y = startY + 1; y < endY && displayIds.size() < MAX_DISPLAYS; y++) {
-                spawn(level, edge, y, tint, ModelStyle.SOLID);
-            }
         }
         if (hasOverhang && displayIds.size() < MAX_DISPLAYS) {
             spawn(level, edge, endY, tint, ModelStyle.FADE_DOWN);
@@ -320,6 +355,13 @@ public final class ClientBoundaryRenderer {
     }
 
     private record Edge(Axis axis, int fixed, int position, int direction, int insideX, int insideZ) {
+
+        private Direction worldDirection() {
+            if (axis == Axis.X) {
+                return direction < 0 ? Direction.NORTH : Direction.SOUTH;
+            }
+            return direction < 0 ? Direction.WEST : Direction.EAST;
+        }
 
         private int outsideX() {
             return axis == Axis.Z ? insideX + direction : insideX;
