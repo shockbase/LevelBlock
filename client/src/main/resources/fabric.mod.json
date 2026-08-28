@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "levelblock-client",
+  "version": "${version}",
+  "name": "LevelBlock Client",
+  "description": "Clientseitige LevelBlock-Kollision und Grenzdarstellung.",
+  "authors": ["Shockbase"],
+  "environment": "client",
+  "entrypoints": {
+    "client": ["de.shockbase.levelblock.client.LevelBlockClientMod"]
+  },
+  "mixins": ["levelblock-client.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

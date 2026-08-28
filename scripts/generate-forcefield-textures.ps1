@@ -58,57 +58,73 @@ public static class LevelBlockForcefieldGenerator
         {
             for (int vPhase = 0; vPhase < PhaseCount; vPhase++)
             {
-                using var output = new Bitmap(
-                    FrameSize,
-                    FrameSize * FrameCount,
-                    PixelFormat.Format32bppArgb
-                );
-                var rectangle = new Rectangle(0, 0, output.Width, output.Height);
-                BitmapData bitmapData = output.LockBits(
-                    rectangle,
-                    ImageLockMode.WriteOnly,
-                    PixelFormat.Format32bppArgb
-                );
-                byte[] data = new byte[bitmapData.Stride * bitmapData.Height];
-
-                for (int frame = 0; frame < FrameCount; frame++)
+                foreach (int variant in new[] { 0, 1, 2, 3 })
                 {
-                    double offset = frame / (double)FrameCount;
-                    for (int y = 0; y < FrameSize; y++)
+                    using var output = new Bitmap(
+                        FrameSize,
+                        FrameSize * FrameCount,
+                        PixelFormat.Format32bppArgb
+                    );
+                    var rectangle = new Rectangle(0, 0, output.Width, output.Height);
+                    BitmapData bitmapData = output.LockBits(
+                        rectangle,
+                        ImageLockMode.WriteOnly,
+                        PixelFormat.Format32bppArgb
+                    );
+                    byte[] data = new byte[bitmapData.Stride * bitmapData.Height];
+
+                    for (int frame = 0; frame < FrameCount; frame++)
                     {
+                        double offset = frame / (double)FrameCount;
+                        for (int y = 0; y < FrameSize; y++)
+                        {
                         double verticalPosition = (y + 0.5) / FrameSize;
                         double gradient = Clamp01((verticalPosition - 0.5) * 2.0);
-                        double localV = (y + 0.5) / FrameSize;
-                        double sampleV = vPhase / (double)PhaseCount
-                                + localV / PhaseCount
-                                + offset;
-
-                        for (int x = 0; x < FrameSize; x++)
-                        {
-                            double localU = (x + 0.5) / FrameSize;
-                            double sampleU = uPhase / (double)PhaseCount
-                                    + localU / PhaseCount
+                        double reverseGradient = Clamp01((0.5 - verticalPosition) * 2.0);
+                            double localV = (y + 0.5) / FrameSize;
+                            double sampleV = vPhase / (double)PhaseCount
+                                    + localV / PhaseCount
                                     + offset;
-                            double[] color = SampleBilinear(pixels, sampleU, sampleV);
-                            double patternAlpha = maxAlpha == minAlpha
-                                    ? 1.0
-                                    : Clamp01((color[3] - minAlpha) / (maxAlpha - minAlpha));
-                            int alpha = (int)Math.Round(255.0 * gradient * patternAlpha);
 
-                            int row = frame * FrameSize + y;
-                            int index = row * bitmapData.Stride + x * 4;
-                            data[index] = ToByte(color[2]);
-                            data[index + 1] = ToByte(color[1]);
-                            data[index + 2] = ToByte(color[0]);
-                            data[index + 3] = (byte)alpha;
+                            for (int x = 0; x < FrameSize; x++)
+                            {
+                                double localU = (x + 0.5) / FrameSize;
+                                double sampleU = uPhase / (double)PhaseCount
+                                        + localU / PhaseCount
+                                        + offset;
+                                double[] color = SampleBilinear(pixels, sampleU, sampleV);
+                                double patternAlpha = maxAlpha == minAlpha
+                                        ? 1.0
+                                        : Clamp01((color[3] - minAlpha) / (maxAlpha - minAlpha));
+                                double fade = variant == 1
+                                        ? 1.0
+                                        : variant == 2
+                                                ? reverseGradient
+                                                : variant == 3
+                                                        ? Math.Max(gradient, reverseGradient)
+                                                        : gradient;
+                                int alpha = (int)Math.Round(255.0 * fade * patternAlpha);
+
+                                int row = frame * FrameSize + y;
+                                int index = row * bitmapData.Stride + x * 4;
+                                data[index] = ToByte(color[2]);
+                                data[index + 1] = ToByte(color[1]);
+                                data[index + 2] = ToByte(color[0]);
+                                data[index + 3] = (byte)alpha;
+                            }
                         }
                     }
-                }
 
-                Marshal.Copy(data, 0, bitmapData.Scan0, data.Length);
-                output.UnlockBits(bitmapData);
-                string name = $"forcefield_u{uPhase}_v{vPhase}.png";
-                output.Save(Path.Combine(outputDirectory, name), ImageFormat.Png);
+                    Marshal.Copy(data, 0, bitmapData.Scan0, data.Length);
+                    output.UnlockBits(bitmapData);
+                    string prefix = variant == 1
+                            ? "forcefield_solid_"
+                            : variant == 2
+                                    ? "forcefield_fade_down_"
+                                    : variant == 3 ? "forcefield_fade_both_" : "forcefield_";
+                    string name = $"{prefix}u{uPhase}_v{vPhase}.png";
+                    output.Save(Path.Combine(outputDirectory, name), ImageFormat.Png);
+                }
             }
         }
     }
@@ -166,13 +182,13 @@ $itemDirectory = Join-Path $ResourcepackRoot 'assets\levelblock\items'
 New-Item -ItemType Directory -Force $textureDirectory, $modelDirectory, $itemDirectory | Out-Null
 
 Get-ChildItem -LiteralPath $textureDirectory -File |
-    Where-Object { $_.Name -match '^forcefield_u\d+_v\d+\.png(?:\.mcmeta)?$' } |
+    Where-Object { $_.Name -match '^forcefield_(?:solid_|fade_(?:down|both)_)?u\d+_v\d+\.png(?:\.mcmeta)?$' } |
     Remove-Item -Force
 Get-ChildItem -LiteralPath $modelDirectory -File |
-    Where-Object { $_.Name -match '^forcefield_u\d+_v\d+\.json$' } |
+    Where-Object { $_.Name -match '^forcefield_(?:solid_|fade_(?:down|both)_)?u\d+_v\d+\.json$' } |
     Remove-Item -Force
 Get-ChildItem -LiteralPath $itemDirectory -File |
-    Where-Object { $_.Name -match '^forcefield_u\d+_v\d+\.json$' } |
+    Where-Object { $_.Name -match '^forcefield_(?:solid_|fade_(?:down|both)_)?u\d+_v\d+\.json$' } |
     Remove-Item -Force
 
 [LevelBlockForcefieldGenerator]::Generate((Resolve-Path $Source).Path, $textureDirectory)
@@ -180,8 +196,9 @@ Get-ChildItem -LiteralPath $itemDirectory -File |
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 foreach ($uPhase in 0) {
     foreach ($vPhase in 0) {
-        $name = "forcefield_u${uPhase}_v${vPhase}"
-        $itemJson = @"
+        foreach ($prefix in 'forcefield_', 'forcefield_solid_', 'forcefield_fade_down_', 'forcefield_fade_both_') {
+            $name = $prefix + 'u' + $uPhase + '_v' + $vPhase
+            $itemJson = @"
 {
   "model": {
     "type": "minecraft:model",
@@ -196,7 +213,7 @@ foreach ($uPhase in 0) {
   }
 }
 "@
-        $modelJson = @"
+            $modelJson = @"
 {
   "ambientocclusion": false,
   "gui_light": "front",
@@ -219,7 +236,7 @@ foreach ($uPhase in 0) {
   ]
 }
 "@
-        $animationJson = @"
+            $animationJson = @"
 {
   "animation": {
     "frametime": 1,
@@ -228,8 +245,9 @@ foreach ($uPhase in 0) {
 }
 "@
 
-        [IO.File]::WriteAllText((Join-Path $itemDirectory "$name.json"), $itemJson, $utf8)
-        [IO.File]::WriteAllText((Join-Path $modelDirectory "$name.json"), $modelJson, $utf8)
-        [IO.File]::WriteAllText((Join-Path $textureDirectory "$name.png.mcmeta"), $animationJson, $utf8)
+            [IO.File]::WriteAllText((Join-Path $itemDirectory "$name.json"), $itemJson, $utf8)
+            [IO.File]::WriteAllText((Join-Path $modelDirectory "$name.json"), $modelJson, $utf8)
+            [IO.File]::WriteAllText((Join-Path $textureDirectory "$name.png.mcmeta"), $animationJson, $utf8)
+        }
     }
 }

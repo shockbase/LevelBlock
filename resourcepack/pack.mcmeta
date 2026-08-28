@@ -1,7 +1,0 @@
-{
-  "pack": {
-    "description": "LevelBlock - sichtbare Spielfeldgrenzen",
-    "min_format": [88, 0],
-    "max_format": [88, 0]
-  }
-}

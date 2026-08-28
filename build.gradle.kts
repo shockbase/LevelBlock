@@ -1,105 +1,41 @@
 plugins {
-    java
-    jacoco
+    base
 }
-
-import org.gradle.api.tasks.bundling.AbstractArchiveTask
-import org.gradle.api.tasks.bundling.Jar
-import org.gradle.api.tasks.bundling.Zip
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 group = "de.shockbase"
 version = providers.environmentVariable("RELEASE_VERSION")
     .orElse(providers.gradleProperty("releaseVersion"))
-    .getOrElse("0.1.0-beta.1-SNAPSHOT")
+    .getOrElse("0.1.0-beta.2-SNAPSHOT")
 
-val pluginVersion = version.toString()
-val paperApiVersion = providers.gradleProperty("paperApiVersion").get()
-val junitVersion = providers.gradleProperty("junitVersion").get()
+allprojects {
+    group = rootProject.group
+    version = rootProject.version
 
-repositories {
-    mavenCentral()
-    maven {
-        name = "papermc"
-        url = uri("https://repo.papermc.io/repository/maven-public/")
+    repositories {
+        mavenCentral()
+        maven("https://maven.fabricmc.net/")
     }
 }
 
-dependencies {
-    compileOnly("io.papermc.paper:paper-api:$paperApiVersion")
-
-    testImplementation("io.papermc.paper:paper-api:$paperApiVersion")
-    testImplementation(platform("org.junit:junit-bom:$junitVersion"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
-}
-
-tasks.withType<JavaCompile>().configureEach {
-    options.encoding = "UTF-8"
-    options.release.set(25)
-    options.compilerArgs.addAll(listOf("-Xlint:all", "-parameters"))
-}
-
-tasks.processResources {
-    filteringCharset = "UTF-8"
-    filesMatching("plugin.yml") {
-        expand("version" to pluginVersion)
-    }
-}
-
-val resourcePack = tasks.register<Zip>("resourcePack") {
+val releaseMods = tasks.register<Sync>("releaseMods") {
     group = "build"
-    description = "Packt das LevelBlock-Resourcepack."
-    archiveFileName.set("LevelBlock-Resourcepack-${project.version}.zip")
-    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
-    from(layout.projectDirectory.dir("resourcepack"))
-}
-
-tasks.withType<Jar>().configureEach {
-    archiveBaseName.set("LevelBlock")
-    manifest {
-        attributes(
-            "Implementation-Title" to project.name,
-            "Implementation-Version" to pluginVersion,
-            "Implementation-Vendor" to "Shockbase"
-        )
+    description = "Sammelt die getrennten Server- und Client-Mods."
+    dependsOn(":server:build", ":client:build")
+    into(layout.buildDirectory.dir("libs"))
+    from(project(":server").layout.buildDirectory.dir("libs")) {
+        include("LevelBlock-Server-*.jar")
+        exclude("*-sources.jar")
+    }
+    from(project(":client").layout.buildDirectory.dir("libs")) {
+        include("LevelBlock-Client-*.jar")
+        exclude("*-sources.jar")
     }
 }
 
-tasks.withType<AbstractArchiveTask>().configureEach {
-    isPreserveFileTimestamps = false
-    isReproducibleFileOrder = true
-}
-
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("failed", "skipped")
-        exceptionFormat = TestExceptionFormat.FULL
-    }
-    finalizedBy(tasks.jacocoTestReport)
-}
-
-jacoco {
-    toolVersion = "0.8.15"
-}
-
-tasks.jacocoTestReport {
-    dependsOn(tasks.test)
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-    }
-}
-
-tasks.check {
-    dependsOn(tasks.jacocoTestReport)
+tasks.assemble {
+    dependsOn(releaseMods)
 }
 
 tasks.build {
-    dependsOn(resourcePack)
+    dependsOn(releaseMods, ":common:check")
 }

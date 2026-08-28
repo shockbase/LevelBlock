@@ -11,4 +11,4 @@ abgegrenzte Aenderung enthalten und neue Spiellogik mit Tests absichern.
 
 Beta-Releases werden ausschliesslich ueber Tags im Format
 `v0.1.0-beta.1` erzeugt. Der GitHub-Workflow baut, testet und veroeffentlicht
-Plugin-JAR und Resourcepack als Pre-Release.
+Server- und Client-Mod als getrennte JARs im Pre-Release.

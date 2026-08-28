@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "package": "de.shockbase.levelblock.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["ClientLevelMixin", "EntityCollisionMixin"],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

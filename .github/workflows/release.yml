@@ -39,13 +39,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Test and build against current Paper 26.2
+      - name: Test and build Fabric 26.2 mods
         env:
           RELEASE_VERSION: ${{ github.ref_name }}
         shell: bash
         run: |
           export RELEASE_VERSION="${RELEASE_VERSION#v}"
-          ./gradlew clean build --no-daemon --refresh-dependencies
+          ./gradlew clean build --no-daemon
 
       - name: Publish GitHub pre-release
         env:
@@ -53,15 +53,15 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          plugin_jar="build/libs/LevelBlock-${version}.jar"
-          resource_pack="build/distributions/LevelBlock-Resourcepack-${version}.zip"
+          server_mod="build/libs/LevelBlock-Server-${version}.jar"
+          client_mod="build/libs/LevelBlock-Client-${version}.jar"
 
-          test -f "${plugin_jar}"
-          test -f "${resource_pack}"
+          test -f "${server_mod}"
+          test -f "${client_mod}"
 
           gh release create "${GITHUB_REF_NAME}" \
-            "${plugin_jar}#LevelBlock plugin" \
-            "${resource_pack}#LevelBlock resource pack" \
+            "${server_mod}#LevelBlock server mod" \
+            "${client_mod}#LevelBlock client mod" \
             --verify-tag \
             --prerelease \
             --generate-notes \

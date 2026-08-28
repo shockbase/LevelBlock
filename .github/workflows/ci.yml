@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: Test and build on Paper 26.2
+    name: Test and build Fabric mods
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -32,17 +32,17 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Test and build against current Paper 26.2
-        run: ./gradlew clean build --no-daemon --refresh-dependencies
+      - name: Test and build Fabric 26.2 mods
+        run: ./gradlew clean build --no-daemon
 
       - name: Upload build outputs
         uses: actions/upload-artifact@v7
         with:
           name: LevelBlock-${{ github.sha }}
           path: |
-            build/libs/LevelBlock-*.jar
-            build/distributions/LevelBlock-Resourcepack-*.zip
-            build/reports/tests/test/
-            build/reports/jacoco/test/
+            build/libs/LevelBlock-Server-*.jar
+            build/libs/LevelBlock-Client-*.jar
+            common/build/reports/tests/test/
+            common/build/reports/jacoco/test/
           if-no-files-found: error
           retention-days: 14
