@@ -44,6 +44,7 @@ jobs:
         id: fabric
         env:
           FORCE_RELEASE: ${{ github.event.inputs.force_release || 'false' }}
+          EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -87,9 +88,14 @@ jobs:
             exit 1
           fi
 
-          release_needed=false
+          update_available=false
           if [[ "${latest_loader}" != "${current_loader}" \
-              || "${latest_api}" != "${current_api}" \
+              || "${latest_api}" != "${current_api}" ]]; then
+            update_available=true
+          fi
+
+          release_needed=false
+          if [[ "${EVENT_NAME}" == "schedule" && "${update_available}" == "true" \
               || "${FORCE_RELEASE}" == "true" ]]; then
             release_needed=true
           fi
@@ -101,6 +107,7 @@ jobs:
             echo "latest_loader=${latest_loader}"
             echo "current_api=${current_api}"
             echo "latest_api=${latest_api}"
+            echo "update_available=${update_available}"
             echo "release_needed=${release_needed}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -199,6 +206,7 @@ jobs:
         shell: bash
         env:
           RELEASE_NEEDED: ${{ steps.fabric.outputs.release_needed }}
+          UPDATE_AVAILABLE: ${{ steps.fabric.outputs.update_available }}
           CURRENT_LOADER: ${{ steps.fabric.outputs.current_loader }}
           LATEST_LOADER: ${{ steps.fabric.outputs.latest_loader }}
           CURRENT_API: ${{ steps.fabric.outputs.current_api }}
@@ -207,6 +215,15 @@ jobs:
         run: |
           if [[ "${RELEASE_NEEDED}" == "true" ]]; then
             echo "Published ${RELEASE_TAG}." >> "${GITHUB_STEP_SUMMARY}"
+          elif [[ "${UPDATE_AVAILABLE}" == "true" ]]; then
+            {
+              echo "A Fabric update is available."
+              echo ""
+              echo "This manual check did not modify main, tags, or releases."
+              echo ""
+              echo "- Loader: ${CURRENT_LOADER} (latest: ${LATEST_LOADER})"
+              echo "- Fabric API: ${CURRENT_API} (latest: ${LATEST_API})"
+            } >> "${GITHUB_STEP_SUMMARY}"
           else
             {
               echo "No Fabric update found."

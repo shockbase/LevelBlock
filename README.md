@@ -1,8 +1,8 @@
 # LevelBlock
 
 [![CI](https://github.com/shockbase/LevelBlock/actions/workflows/ci.yml/badge.svg)](https://github.com/shockbase/LevelBlock/actions/workflows/ci.yml)
-[![Compatibility Release](https://github.com/shockbase/LevelBlock/actions/workflows/release.yml/badge.svg)](https://github.com/shockbase/LevelBlock/actions/workflows/release.yml)
-[![Fabric Compatibility Release](https://github.com/shockbase/LevelBlock/actions/workflows/fabric-update-release.yml/badge.svg)](https://github.com/shockbase/LevelBlock/actions/workflows/fabric-update-release.yml)
+[![Release](https://img.shields.io/github/v/release/shockbase/LevelBlock?display_name=tag&sort=semver&label=release)](https://github.com/shockbase/LevelBlock/releases/latest)
+[![Fabric Compatibility](https://github.com/shockbase/LevelBlock/actions/workflows/fabric-update-release.yml/badge.svg?branch=main)](https://github.com/shockbase/LevelBlock/actions/workflows/fabric-update-release.yml)
 
 LevelBlock ist eine Fabric-Mod für gemeinsame Survival-Runden, in denen die
 begehbare Welt säulenweise freigeschaltet wird. Jede neue angrenzende
