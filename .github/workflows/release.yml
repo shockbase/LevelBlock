@@ -3,7 +3,7 @@ name: Compatibility Release
 on:
   push:
     tags:
-      - "v*+mc.*.loader.*.api.*"
+      - 'v*\+mc.*.loader.*.api.*'
 
 permissions:
   contents: write
