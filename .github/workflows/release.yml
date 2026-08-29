@@ -1,9 +1,9 @@
-name: Beta Release
+name: Compatibility Release
 
 on:
   push:
     tags:
-      - "v*.*.*-beta.*"
+      - "v*+mc.*.loader.*.api.*"
 
 permissions:
   contents: write
@@ -14,21 +14,43 @@ concurrency:
 
 jobs:
   release:
-    name: Build and publish beta
+    name: Build and publish compatibility release
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Validate beta tag
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate compatibility tag
+        id: compatibility
         shell: bash
         run: |
-          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then
-            echo "Expected a tag such as v0.1.0-beta.1" >&2
+          set -euo pipefail
+
+          property() {
+            sed -n "s/^$1=//p" gradle.properties
+          }
+
+          levelblock_version="$(property levelBlockVersion)"
+          minecraft_version="$(property minecraftVersion)"
+          loader_version="$(property fabricLoaderVersion)"
+          api_version="$(property fabricApiVersion)"
+          api_base="${api_version%%+*}"
+          expected_tag="v${levelblock_version}+mc.${minecraft_version}.loader.${loader_version}.api.${api_base}"
+
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Expected compatibility tag ${expected_tag}, got ${GITHUB_REF_NAME}." >&2
             exit 1
           fi
 
-      - name: Check out repository
-        uses: actions/checkout@v7
+          {
+            echo "levelblock=${levelblock_version}"
+            echo "minecraft=${minecraft_version}"
+            echo "loader=${loader_version}"
+            echo "api=${api_version}"
+            echo "version=${GITHUB_REF_NAME#v}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Set up Java 25
         uses: actions/setup-java@v6
@@ -39,30 +61,37 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Test and build Fabric 26.2 mods
-        env:
-          RELEASE_VERSION: ${{ github.ref_name }}
-        shell: bash
-        run: |
-          export RELEASE_VERSION="${RELEASE_VERSION#v}"
-          ./gradlew clean build --no-daemon
+      - name: Test and build Fabric mods
+        run: ./gradlew clean build --no-daemon
 
-      - name: Publish GitHub pre-release
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.compatibility.outputs.version }}
+          LEVELBLOCK_VERSION: ${{ steps.compatibility.outputs.levelblock }}
+          MINECRAFT_VERSION: ${{ steps.compatibility.outputs.minecraft }}
+          FABRIC_LOADER_VERSION: ${{ steps.compatibility.outputs.loader }}
+          FABRIC_API_VERSION: ${{ steps.compatibility.outputs.api }}
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          server_mod="build/libs/LevelBlock-Server-${version}.jar"
-          client_mod="build/libs/LevelBlock-Client-${version}.jar"
+          set -euo pipefail
 
+          server_mod="build/libs/LevelBlock-Server-${VERSION}.jar"
+          client_mod="build/libs/LevelBlock-Client-${VERSION}.jar"
           test -f "${server_mod}"
           test -f "${client_mod}"
+
+          notes="$(
+            printf '%s\n\n%s\n%s\n%s\n' \
+              "Getestetes LevelBlock-Kompatibilitätsrelease." \
+              "- Minecraft: ${MINECRAFT_VERSION}" \
+              "- Fabric Loader: ${FABRIC_LOADER_VERSION}" \
+              "- Fabric API: ${FABRIC_API_VERSION}"
+          )"
 
           gh release create "${GITHUB_REF_NAME}" \
             "${server_mod}#LevelBlock server mod" \
             "${client_mod}#LevelBlock client mod" \
             --verify-tag \
-            --prerelease \
-            --generate-notes \
-            --title "LevelBlock ${version}"
+            --title "LevelBlock ${LEVELBLOCK_VERSION} for Minecraft ${MINECRAFT_VERSION}" \
+            --notes "${notes}"

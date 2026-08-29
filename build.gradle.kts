@@ -3,9 +3,11 @@ plugins {
 }
 
 group = "de.shockbase"
-version = providers.environmentVariable("RELEASE_VERSION")
-    .orElse(providers.gradleProperty("releaseVersion"))
-    .getOrElse("0.1.0-beta.2-SNAPSHOT")
+val levelBlockVersion = providers.gradleProperty("levelBlockVersion").get()
+val minecraftCompatibility = providers.gradleProperty("minecraftVersion").get()
+val loaderCompatibility = providers.gradleProperty("fabricLoaderVersion").get()
+val apiCompatibility = providers.gradleProperty("fabricApiVersion").get().substringBefore("+")
+version = "$levelBlockVersion+mc.$minecraftCompatibility.loader.$loaderCompatibility.api.$apiCompatibility"
 
 allprojects {
     group = rootProject.group

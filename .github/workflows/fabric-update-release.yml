@@ -1,0 +1,217 @@
+name: Fabric Compatibility Release
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: Publish the current Fabric target when no release exists yet
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fabric-compatibility-release
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Update Fabric target and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out main with tags
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Resolve current Fabric target
+        id: fabric
+        env:
+          FORCE_RELEASE: ${{ github.event.inputs.force_release || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          property() {
+            sed -n "s/^$1=//p" gradle.properties
+          }
+
+          levelblock_version="$(property levelBlockVersion)"
+          minecraft_version="$(property minecraftVersion)"
+          current_loader="$(property fabricLoaderVersion)"
+          current_api="$(property fabricApiVersion)"
+
+          test -n "${levelblock_version}"
+          test -n "${minecraft_version}"
+          test -n "${current_loader}"
+          test -n "${current_api}"
+
+          loader_json="$(curl --fail --silent --show-error \
+            "https://meta.fabricmc.net/v2/versions/loader/${minecraft_version}")"
+          latest_loader="$(jq -r \
+            '([.[] | select(.loader.stable == true)][0].loader.version) // .[0].loader.version // empty' \
+            <<<"${loader_json}")"
+
+          minecraft_pattern="${minecraft_version//./\\.}"
+          latest_api="$(
+            curl --fail --silent --show-error \
+              "https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/maven-metadata.xml" \
+              | sed -n 's:.*<version>\([^<]*\)</version>.*:\1:p' \
+              | grep -E "^[0-9]+\.[0-9]+\.[0-9]+\+${minecraft_pattern}$" \
+              | sort -V \
+              | tail -n 1
+          )"
+
+          if [[ ! "${latest_loader}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid Fabric Loader version: ${latest_loader}" >&2
+            exit 1
+          fi
+          if [[ ! "${latest_api}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9A-Za-z._-]+$ ]]; then
+            echo "Invalid Fabric API version: ${latest_api}" >&2
+            exit 1
+          fi
+
+          release_needed=false
+          if [[ "${latest_loader}" != "${current_loader}" \
+              || "${latest_api}" != "${current_api}" \
+              || "${FORCE_RELEASE}" == "true" ]]; then
+            release_needed=true
+          fi
+
+          {
+            echo "levelblock=${levelblock_version}"
+            echo "minecraft=${minecraft_version}"
+            echo "current_loader=${current_loader}"
+            echo "latest_loader=${latest_loader}"
+            echo "current_api=${current_api}"
+            echo "latest_api=${latest_api}"
+            echo "release_needed=${release_needed}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare compatibility version
+        if: steps.fabric.outputs.release_needed == 'true'
+        id: release
+        env:
+          LEVELBLOCK_VERSION: ${{ steps.fabric.outputs.levelblock }}
+          MINECRAFT_VERSION: ${{ steps.fabric.outputs.minecraft }}
+          FABRIC_LOADER_VERSION: ${{ steps.fabric.outputs.latest_loader }}
+          FABRIC_API_VERSION: ${{ steps.fabric.outputs.latest_api }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_base="${FABRIC_API_VERSION%%+*}"
+          version="${LEVELBLOCK_VERSION}+mc.${MINECRAFT_VERSION}.loader.${FABRIC_LOADER_VERSION}.api.${api_base}"
+          tag="v${version}"
+
+          if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then
+            echo "Compatibility release already exists: ${tag}" >&2
+            exit 1
+          fi
+
+          sed -i \
+            "s/^fabricLoaderVersion=.*/fabricLoaderVersion=${FABRIC_LOADER_VERSION}/" \
+            gradle.properties
+          sed -i \
+            "s/^fabricApiVersion=.*/fabricApiVersion=${FABRIC_API_VERSION}/" \
+            gradle.properties
+
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Test and build release
+        if: steps.fabric.outputs.release_needed == 'true'
+        run: ./gradlew clean build --no-daemon
+
+      - name: Commit and tag Fabric target
+        if: steps.fabric.outputs.release_needed == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          FABRIC_LOADER_VERSION: ${{ steps.fabric.outputs.latest_loader }}
+          FABRIC_API_VERSION: ${{ steps.fabric.outputs.latest_api }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gradle.properties
+          if ! git diff --cached --quiet; then
+            git commit -m \
+              "build: target Fabric Loader ${FABRIC_LOADER_VERSION} and API ${FABRIC_API_VERSION}"
+          fi
+          git tag -a "${TAG}" -m "LevelBlock ${TAG#v}"
+          git push --atomic origin "HEAD:main" "refs/tags/${TAG}"
+
+      - name: Publish GitHub release
+        if: steps.fabric.outputs.release_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+          LEVELBLOCK_VERSION: ${{ steps.fabric.outputs.levelblock }}
+          MINECRAFT_VERSION: ${{ steps.fabric.outputs.minecraft }}
+          FABRIC_LOADER_VERSION: ${{ steps.fabric.outputs.latest_loader }}
+          FABRIC_API_VERSION: ${{ steps.fabric.outputs.latest_api }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          server_mod="build/libs/LevelBlock-Server-${VERSION}.jar"
+          client_mod="build/libs/LevelBlock-Client-${VERSION}.jar"
+          test -f "${server_mod}"
+          test -f "${client_mod}"
+
+          notes="$(
+            printf '%s\n\n%s\n%s\n%s\n' \
+              "LevelBlock ${LEVELBLOCK_VERSION} – automatisch getestetes Fabric-Kompatibilitätsrelease." \
+              "- Minecraft: ${MINECRAFT_VERSION}" \
+              "- Fabric Loader: ${FABRIC_LOADER_VERSION}" \
+              "- Fabric API: ${FABRIC_API_VERSION}"
+          )"
+
+          gh release create "${TAG}" \
+            "${server_mod}#LevelBlock server mod" \
+            "${client_mod}#LevelBlock client mod" \
+            --verify-tag \
+            --title "LevelBlock ${LEVELBLOCK_VERSION} for Minecraft ${MINECRAFT_VERSION}" \
+            --notes "${notes}"
+
+      - name: Report result
+        shell: bash
+        env:
+          RELEASE_NEEDED: ${{ steps.fabric.outputs.release_needed }}
+          CURRENT_LOADER: ${{ steps.fabric.outputs.current_loader }}
+          LATEST_LOADER: ${{ steps.fabric.outputs.latest_loader }}
+          CURRENT_API: ${{ steps.fabric.outputs.current_api }}
+          LATEST_API: ${{ steps.fabric.outputs.latest_api }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if [[ "${RELEASE_NEEDED}" == "true" ]]; then
+            echo "Published ${RELEASE_TAG}." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            {
+              echo "No Fabric update found."
+              echo ""
+              echo "- Loader: ${CURRENT_LOADER} (latest: ${LATEST_LOADER})"
+              echo "- Fabric API: ${CURRENT_API} (latest: ${LATEST_API})"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
