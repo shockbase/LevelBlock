@@ -207,7 +207,7 @@ foreach ($uPhase in 0) {
       {
         "type": "minecraft:custom_model_data",
         "index": 0,
-        "default": 16724016
+        "default": 16755200
       }
     ]
   }

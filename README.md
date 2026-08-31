@@ -26,13 +26,13 @@ Die fertigen Dateien befinden sich unter
 
 Für eine Installation immer beide Dateien aus demselben Release verwenden:
 
-- `LevelBlock-Server-1.0.0+mc.26.2.loader.0.19.3.api.0.158.0.jar`
-- `LevelBlock-Client-1.0.0+mc.26.2.loader.0.19.3.api.0.158.0.jar`
+- `LevelBlock-Server-1.0.1+mc.26.2.loader.0.19.3.api.0.158.0.jar`
+- `LevelBlock-Client-1.0.1+mc.26.2.loader.0.19.3.api.0.158.0.jar`
 
 Die Versionsnummer enthält direkt die getestete Zielumgebung:
 
 ```text
-1.0.0+mc.26.2.loader.0.19.3.api.0.158.0
+1.0.1+mc.26.2.loader.0.19.3.api.0.158.0
 │     │       │             └─ Fabric API
 │     │       └─ Fabric Loader
 │     └─ Minecraft
@@ -46,7 +46,7 @@ Loader- und Fabric-API-Version zusammengehören.
 
 | Komponente | Anforderung |
 | --- | --- |
-| LevelBlock | `1.0.0` |
+| LevelBlock | `1.0.1` |
 | Minecraft | `26.2` |
 | Java | `25` |
 | Getesteter Fabric Loader | `0.19.3` |
@@ -181,8 +181,9 @@ Ein Resourcepack-Download ist daher nicht erforderlich.
    einen 5×5-Lobbybereich.
 2. `/levelblock start` startet den Countdown.
 3. Alle geeigneten Spieler im Lobbybereich werden in eine gemeinsame Session
-   aufgenommen.
-4. Die Session beginnt mit einem freigeschalteten 3×3-Bereich.
+   aufgenommen und gemeinsam in den Startbereich versetzt.
+4. Die Session beginnt mit einem freigeschalteten 3×3-Bereich um den
+   Mittelpunkt der Lobby.
 5. Beim Betreten einer angrenzenden gesperrten Säule wird dem auslösenden
    Spieler ein Erfahrungslevel abgezogen und die Säule für die gesamte Session
    freigeschaltet.
@@ -192,9 +193,13 @@ Ein Resourcepack-Download ist daher nicht erforderlich.
 
 | Farbe | Bedeutung |
 | --- | --- |
-| Blau | Lobbybereich |
-| Rot | Gesperrte Grenze, aktuell nicht bezahlbar |
-| Grün | Angrenzende Säule kann mit einem Erfahrungslevel freigeschaltet werden |
+| Aqua | Lobbybereich |
+| Gold | Standardfarbe der Sessiongrenze |
+| Grün | Die unmittelbar angrenzende Säulenseite kann mit einem Erfahrungslevel freigeschaltet werden |
+| Rot | Die unmittelbar angrenzende Säulenseite kann aktuell nicht freigeschaltet werden |
+
+Nach einer erfolgreichen Freischaltung blitzt die gesamte Sessiongrenze kurz
+grün auf und blendet anschließend wieder zu Gold über.
 
 Die Grenze ist keine Minecraft-WorldBorder und besteht nicht aus
 Barriereblöcken. Sie schränkt nur die Bewegung des lokalen Spielers mit
@@ -216,6 +221,7 @@ Alle Spielerbefehle müssen im Spiel ausgeführt werden.
 | `/levelblock help` | Alle | Kurzübersicht anzeigen |
 | `/levelblock lobby` | Alle | 5×5-Lobby an der aktuellen Position erstellen |
 | `/levelblock start` | Lobbybesitzer | Countdown der eigenen Lobby starten |
+| `/levelblock cancel` | Lobbybesitzer | Eigene Lobby oder laufenden Countdown abbrechen |
 | `/levelblock stop` | Sessionbesitzer oder Operator | Eigene Session stoppen |
 | `/levelblock invite <spieler>` | Sessionbesitzer | Online-Spieler einladen |
 | `/levelblock join [besitzer\|uuid]` | Eingeladener Spieler | Einladung annehmen |
@@ -339,9 +345,9 @@ veröffentlicht anschließend Server- und Client-JAR:
 
 ```bash
 git tag -a \
-  v1.0.0+mc.26.2.loader.0.19.3.api.0.158.0 \
-  -m "LevelBlock 1.0.0 for Minecraft 26.2"
-git push origin v1.0.0+mc.26.2.loader.0.19.3.api.0.158.0
+  v1.0.1+mc.26.2.loader.0.19.3.api.0.158.0 \
+  -m "LevelBlock 1.0.1 for Minecraft 26.2"
+git push origin v1.0.1+mc.26.2.loader.0.19.3.api.0.158.0
 ```
 
 ### Automatisches Release für neue Fabric-Versionen

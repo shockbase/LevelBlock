@@ -26,6 +26,7 @@ public final class ClientBoundaryState {
     private LongSet unlocked = new LongOpenHashSet();
     private List<LobbyArea> lobbies = List.of();
     private long revision;
+    private long expansionRevision;
 
     private ClientBoundaryState() {
     }
@@ -40,9 +41,17 @@ public final class ClientBoundaryState {
             dimensionId = "";
             unlocked = new LongOpenHashSet();
         } else {
+            boolean sameBoundary = active && dimensionId.equals(payload.dimensionId());
+            boolean expanded = false;
             LongSet columns = new LongOpenHashSet(payload.unlockedColumns().length);
             for (long packed : payload.unlockedColumns()) {
+                if (sameBoundary && !unlocked.contains(packed)) {
+                    expanded = true;
+                }
                 columns.add(packed);
+            }
+            if (expanded) {
+                expansionRevision++;
             }
             active = true;
             dimensionId = payload.dimensionId();
@@ -82,6 +91,10 @@ public final class ClientBoundaryState {
 
     public long revision() {
         return revision;
+    }
+
+    public long expansionRevision() {
+        return expansionRevision;
     }
 
     public List<VoxelShape> collisionShapes(Entity source, Level level, AABB sweptBounds) {

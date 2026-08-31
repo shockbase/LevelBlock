@@ -10,9 +10,7 @@ import de.shockbase.levelblock.session.LevelBlockSession;
 import de.shockbase.levelblock.session.WorldProgress;
 import de.shockbase.levelblock.util.MovementCollision;
 import de.shockbase.levelblock.util.MovementPath;
-import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
@@ -24,14 +22,12 @@ import java.util.UUID;
 
 public final class MovementValidator {
 
-    private static final int MESSAGE_COOLDOWN_TICKS = 20;
     private static final double MAX_MOVEMENT_PER_TICK = 128.0D;
 
     private final MinecraftServer server;
     private final SessionManager sessions;
     private final SafePositionFinder safePositions;
     private final Map<UUID, AcceptedPosition> accepted = new HashMap<>();
-    private final Map<UUID, Integer> lastDeniedMessage = new HashMap<>();
 
     public MovementValidator(MinecraftServer server, SessionManager sessions, SafePositionFinder safePositions) {
         this.server = server;
@@ -41,7 +37,6 @@ public final class MovementValidator {
 
     public void tick() {
         accepted.keySet().removeIf(id -> server.getPlayerList().getPlayer(id) == null);
-        lastDeniedMessage.keySet().removeIf(id -> server.getPlayerList().getPlayer(id) == null);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             validate(player);
         }
@@ -70,7 +65,7 @@ public final class MovementValidator {
             return;
         }
         if (Math.abs(dx) > MAX_MOVEMENT_PER_TICK || Math.abs(dz) > MAX_MOVEMENT_PER_TICK) {
-            deny(player, previous, progress, "Diese Bewegung wurde blockiert.");
+            deny(player, previous, progress);
             return;
         }
 
@@ -79,23 +74,21 @@ public final class MovementValidator {
         );
         ExpansionPlan plan = ExpansionPlanner.plan(progress, traversed);
         if (plan instanceof ExpansionPlan.Rejected) {
-            deny(player, previous, progress, "Diese Säule grenzt nicht an euren Bereich.");
+            deny(player, previous, progress);
             return;
         }
 
         ExpansionPlan.Approved approved = (ExpansionPlan.Approved) plan;
         if (approved.cost() == 0) {
             if (!progress.isUnlocked(player.blockPosition().getX(), player.blockPosition().getZ())) {
-                deny(player, previous, progress, "Du brauchst 1 Level für die nächste Säule.");
+                deny(player, previous, progress);
             } else {
                 accept(player, dimensionId);
             }
             return;
         }
         if (player.experienceLevel < approved.cost()) {
-            deny(player, previous, progress, approved.cost() == 1
-                    ? "Du brauchst 1 Level für die nächste Säule."
-                    : "Du brauchst " + approved.cost() + " Level für diese Bewegung.");
+            deny(player, previous, progress);
             return;
         }
 
@@ -106,10 +99,6 @@ public final class MovementValidator {
                 player.getX(), player.getY() + 1.0D, player.getZ(),
                 24, 0.5D, 0.8D, 0.5D, 0.05D
         );
-        player.sendOverlayMessage(Component.literal(approved.cost() == 1
-                ? "1 Level bezahlt – 1 neue Säule freigeschaltet."
-                : approved.cost() + " Level bezahlt – " + approved.cost() + " neue Säulen freigeschaltet."
-        ).withStyle(ChatFormatting.GREEN));
         accept(player, dimensionId);
     }
 
@@ -121,19 +110,12 @@ public final class MovementValidator {
         player.teleportTo(safe.x, safe.y, safe.z);
     }
 
-    private void deny(ServerPlayer player, AcceptedPosition previous, WorldProgress progress, String message) {
+    private void deny(ServerPlayer player, AcceptedPosition previous, WorldProgress progress) {
         MovementCollision.Result resolved = MovementCollision.resolve(
                 previous.x(), previous.z(), player.getX(), player.getZ(), player.getBbWidth(), progress::isUnlocked
         );
         player.teleportTo(resolved.x(), player.getY(), resolved.z());
         accept(player, previous.dimensionId());
-
-        int now = server.getTickCount();
-        int last = lastDeniedMessage.getOrDefault(player.getUUID(), Integer.MIN_VALUE / 2);
-        if (now - last >= MESSAGE_COOLDOWN_TICKS) {
-            player.sendOverlayMessage(Component.literal(message).withStyle(ChatFormatting.RED));
-            lastDeniedMessage.put(player.getUUID(), now);
-        }
     }
 
     private void accept(ServerPlayer player, String dimensionId) {

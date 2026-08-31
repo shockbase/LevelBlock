@@ -23,27 +23,38 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public final class ClientBoundaryRenderer {
 
-    public static final int LOBBY_TINT = 0x20A0FF;
-    public static final int BLOCKED_TINT = 0xFF3030;
-    public static final int EXPANDABLE_TINT = 0x40FF80;
+    public static final int LOBBY_TINT = 0x55FFFF;
+    public static final int DEFAULT_TINT = 0xFFAA00;
+    public static final int EXPANDABLE_TINT = 0x55FF55;
+    public static final int BLOCKED_TINT = 0xFF5555;
 
     private static final int RENDER_RADIUS = 32;
+    private static final double IMMEDIATE_TILE_DISTANCE = 0.8D;
+    private static final double IMMEDIATE_TILE_DISTANCE_SQUARED
+            = IMMEDIATE_TILE_DISTANCE * IMMEDIATE_TILE_DISTANCE;
     private static final int MAX_DISPLAYS = 4096;
+    private static final int FLASH_HOLD_TICKS = 4;
+    private static final int FLASH_FADE_TICKS = 16;
+    private static final int FLASH_TOTAL_TICKS = FLASH_HOLD_TICKS + FLASH_FADE_TICKS;
 
     private final ClientBoundaryState state;
-    private final List<Integer> displayIds = new ArrayList<>();
+    private final Map<TileKey, RenderedTile> renderedTiles = new HashMap<>();
     private final Map<TintedModel, ItemStack> itemCache = new HashMap<>();
     private ClientLevel displayLevel;
     private long renderedRevision = Long.MIN_VALUE;
     private int renderedX = Integer.MIN_VALUE;
+    private int renderedY = Integer.MIN_VALUE;
     private int renderedZ = Integer.MIN_VALUE;
-    private int renderedLevel = Integer.MIN_VALUE;
+    private long observedExpansionRevision = Long.MIN_VALUE;
+    private int flashTicksRemaining;
     private int nextEntityId = -1_000_000;
     private boolean terrainDirty;
 
@@ -53,21 +64,43 @@ public final class ClientBoundaryRenderer {
 
     public void tick(Minecraft minecraft) {
         if (minecraft.level == null || minecraft.player == null) {
+            flashTicksRemaining = 0;
+            observedExpansionRevision = state.expansionRevision();
             clear();
             return;
         }
+        long expansionRevision = state.expansionRevision();
+        if (observedExpansionRevision == Long.MIN_VALUE) {
+            observedExpansionRevision = expansionRevision;
+        } else if (expansionRevision > observedExpansionRevision) {
+            observedExpansionRevision = expansionRevision;
+            flashTicksRemaining = FLASH_TOTAL_TICKS;
+        } else if (expansionRevision != observedExpansionRevision) {
+            observedExpansionRevision = expansionRevision;
+        }
         int x = minecraft.player.getBlockX();
+        int y = minecraft.player.getBlockY();
         int z = minecraft.player.getBlockZ();
         int experienceLevel = minecraft.player.experienceLevel;
-        if (displayLevel == minecraft.level
-                && renderedRevision == state.revision()
-                && !terrainDirty
-                && Math.abs(renderedX - x) < 4
-                && Math.abs(renderedZ - z) < 4
-                && (renderedLevel > 0) == (experienceLevel > 0)) {
-            return;
+        boolean geometryChanged = displayLevel != minecraft.level
+                || renderedRevision != state.revision()
+                || terrainDirty
+                || renderedX != x
+                || renderedY != y
+                || renderedZ != z;
+        if (geometryChanged) {
+            rebuild(minecraft.level, x, y, z);
         }
-        rebuild(minecraft.level, x, z, experienceLevel);
+        updateBoundaryTints(
+                minecraft.player.getX(),
+                minecraft.player.getY() + 0.9D,
+                minecraft.player.getZ(),
+                experienceLevel,
+                flashTicksRemaining
+        );
+        if (flashTicksRemaining > 0) {
+            flashTicksRemaining--;
+        }
     }
 
     public void terrainChanged(ClientLevel level, BlockPos pos) {
@@ -83,47 +116,57 @@ public final class ClientBoundaryRenderer {
 
     public void clear() {
         if (displayLevel != null) {
-            for (int id : displayIds) {
-                displayLevel.removeEntity(id, Entity.RemovalReason.DISCARDED);
+            for (RenderedTile tile : renderedTiles.values()) {
+                displayLevel.removeEntity(tile.display.getId(), Entity.RemovalReason.DISCARDED);
             }
         }
-        displayIds.clear();
+        renderedTiles.clear();
         displayLevel = null;
         renderedRevision = Long.MIN_VALUE;
+        renderedX = Integer.MIN_VALUE;
+        renderedY = Integer.MIN_VALUE;
+        renderedZ = Integer.MIN_VALUE;
         terrainDirty = false;
     }
 
-    private void rebuild(ClientLevel level, int playerX, int playerZ, int experienceLevel) {
-        clear();
+    private void rebuild(ClientLevel level, int playerX, int playerY, int playerZ) {
+        if (displayLevel != level) {
+            clear();
+        }
         displayLevel = level;
-        renderedRevision = state.revision();
-        renderedX = playerX;
-        renderedZ = playerZ;
-        renderedLevel = experienceLevel;
+        Map<TileKey, DesiredTile> desiredTiles = new LinkedHashMap<>();
 
         if (state.isActive(level)) {
-            int tint = experienceLevel > 0 ? EXPANDABLE_TINT : BLOCKED_TINT;
             for (Edge edge : boundaryEdges(playerX, playerZ)) {
-                addEdge(level, edge, tint);
-                if (displayIds.size() >= MAX_DISPLAYS) {
-                    return;
+                addEdge(level, edge, DEFAULT_TINT, true, desiredTiles);
+                if (desiredTiles.size() >= MAX_DISPLAYS) {
+                    break;
                 }
             }
         }
         String currentDimension = level.dimension().identifier().toString();
         for (LobbyArea lobby : state.lobbies()) {
+            if (desiredTiles.size() >= MAX_DISPLAYS) {
+                break;
+            }
             if (!lobby.dimensionId().equals(currentDimension)
                     || distanceSquared(lobby.centerX(), lobby.centerZ(), playerX, playerZ)
                     > (RENDER_RADIUS + 4) * (RENDER_RADIUS + 4)) {
                 continue;
             }
             for (Edge edge : lobbyEdges(lobby)) {
-                addEdge(level, edge, LOBBY_TINT);
-                if (displayIds.size() >= MAX_DISPLAYS) {
-                    return;
+                addEdge(level, edge, LOBBY_TINT, false, desiredTiles);
+                if (desiredTiles.size() >= MAX_DISPLAYS) {
+                    break;
                 }
             }
         }
+        reconcile(level, desiredTiles);
+        renderedRevision = state.revision();
+        renderedX = playerX;
+        renderedY = playerY;
+        renderedZ = playerZ;
+        terrainDirty = false;
     }
 
     private Set<Edge> boundaryEdges(int playerX, int playerZ) {
@@ -171,12 +214,16 @@ public final class ClientBoundaryRenderer {
     private void addEdge(
             ClientLevel level,
             Edge edge,
-            int tint
+            int tint,
+            boolean sessionBoundary,
+            Map<TileKey, DesiredTile> desiredTiles
     ) {
         int y = level.getMinY() + 1;
         int maximum = level.getMaxY() - 1;
-        addAdjacentBlockFills(level, edge, tint, y, maximum);
-        while (y <= maximum && displayIds.size() < MAX_DISPLAYS) {
+        addAdjacentBlockFills(
+                level, edge, tint, sessionBoundary, y, maximum, desiredTiles
+        );
+        while (y <= maximum && desiredTiles.size() < MAX_DISPLAYS) {
             while (y <= maximum && !isBoundaryOpen(level, edge, y)) {
                 y++;
             }
@@ -188,7 +235,9 @@ public final class ClientBoundaryRenderer {
                 y++;
             }
             int endY = y - 1;
-            spawnOpenLayer(level, edge, startY, endY, tint);
+            spawnOpenLayer(
+                    level, edge, startY, endY, tint, sessionBoundary, desiredTiles
+            );
         }
     }
 
@@ -196,10 +245,12 @@ public final class ClientBoundaryRenderer {
             ClientLevel level,
             Edge edge,
             int tint,
+            boolean sessionBoundary,
             int minimum,
-            int maximum
+            int maximum,
+            Map<TileKey, DesiredTile> desiredTiles
     ) {
-        for (int y = minimum; y <= maximum && displayIds.size() < MAX_DISPLAYS; y++) {
+        for (int y = minimum; y <= maximum && desiredTiles.size() < MAX_DISPLAYS; y++) {
             boolean insideOpen = isOpen(level, edge.insideX(), y, edge.insideZ());
             boolean outsideOpen = isOpen(level, edge.outsideX(), y, edge.outsideZ());
             if (insideOpen == outsideOpen) {
@@ -212,7 +263,9 @@ public final class ClientBoundaryRenderer {
                     ? edge.worldDirection().getOpposite()
                     : edge.worldDirection();
             if (isRenderableBlockFace(level, blockX, y, blockZ, visibleFace)) {
-                spawn(level, edge, y, tint, ModelStyle.SOLID);
+                stageTile(
+                        desiredTiles, edge, y, tint, ModelStyle.SOLID, sessionBoundary
+                );
             }
         }
     }
@@ -231,21 +284,35 @@ public final class ClientBoundaryRenderer {
                 && block.isFaceSturdy(level, pos, visibleFace);
     }
 
-    private void spawnOpenLayer(ClientLevel level, Edge edge, int startY, int endY, int tint) {
+    private void spawnOpenLayer(
+            ClientLevel level,
+            Edge edge,
+            int startY,
+            int endY,
+            int tint,
+            boolean sessionBoundary,
+            Map<TileKey, DesiredTile> desiredTiles
+    ) {
         boolean hasGround = hasGround(level, edge, startY);
         boolean hasOverhang = hasOverhang(level, edge, endY);
         if (!hasGround && !hasOverhang) {
             return;
         }
         if (hasGround && hasOverhang && startY == endY) {
-            spawn(level, edge, startY, tint, ModelStyle.FADE_BOTH);
+            stageTile(
+                    desiredTiles, edge, startY, tint, ModelStyle.FADE_BOTH, sessionBoundary
+            );
             return;
         }
         if (hasGround) {
-            spawn(level, edge, startY, tint, ModelStyle.FADE_UP);
+            stageTile(
+                    desiredTiles, edge, startY, tint, ModelStyle.FADE_UP, sessionBoundary
+            );
         }
-        if (hasOverhang && displayIds.size() < MAX_DISPLAYS) {
-            spawn(level, edge, endY, tint, ModelStyle.FADE_DOWN);
+        if (hasOverhang && desiredTiles.size() < MAX_DISPLAYS) {
+            stageTile(
+                    desiredTiles, edge, endY, tint, ModelStyle.FADE_DOWN, sessionBoundary
+            );
         }
     }
 
@@ -290,18 +357,148 @@ public final class ClientBoundaryRenderer {
                 && level.getFluidState(pos).isEmpty();
     }
 
-    private void spawn(ClientLevel level, Edge edge, int y, int tint, ModelStyle style) {
+    private void updateBoundaryTints(
+            double playerX,
+            double playerY,
+            double playerZ,
+            int experienceLevel,
+            int flashTicks
+    ) {
+        RenderedTile closestTile = null;
+        if (flashTicks <= 0) {
+            double closestDistance = IMMEDIATE_TILE_DISTANCE_SQUARED;
+            for (RenderedTile tile : renderedTiles.values()) {
+                if (!tile.sessionBoundary) {
+                    continue;
+                }
+                double distance = tileDistanceSquared(tile, playerX, playerY, playerZ);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestTile = tile;
+                }
+            }
+        }
+
+        Edge highlightedEdge = closestTile == null ? null : closestTile.edge;
+        int flashTint = flashTicks > 0 ? flashTint(flashTicks) : DEFAULT_TINT;
+        for (RenderedTile tile : renderedTiles.values()) {
+            if (!tile.sessionBoundary) {
+                continue;
+            }
+            int tint = flashTicks > 0
+                    ? flashTint
+                    : tile.edge.equals(highlightedEdge)
+                    ? experienceLevel > 0 ? EXPANDABLE_TINT : BLOCKED_TINT
+                    : DEFAULT_TINT;
+            setTint(tile, tint);
+        }
+    }
+
+    private static double tileDistanceSquared(
+            RenderedTile tile,
+            double playerX,
+            double playerY,
+            double playerZ
+    ) {
+        double verticalDistance = intervalDistance(playerY, tile.y, tile.y + 1.0D);
+        double xDistance;
+        double zDistance;
+        if (tile.edge.axis() == Axis.X) {
+            xDistance = intervalDistance(
+                    playerX, tile.edge.position(), tile.edge.position() + 1.0D
+            );
+            zDistance = Math.abs(playerZ - tile.edge.fixed());
+        } else {
+            xDistance = Math.abs(playerX - tile.edge.fixed());
+            zDistance = intervalDistance(
+                    playerZ, tile.edge.position(), tile.edge.position() + 1.0D
+            );
+        }
+        return xDistance * xDistance
+                + verticalDistance * verticalDistance
+                + zDistance * zDistance;
+    }
+
+    private static double intervalDistance(double value, double minimum, double maximum) {
+        if (value < minimum) {
+            return minimum - value;
+        }
+        if (value > maximum) {
+            return value - maximum;
+        }
+        return 0.0D;
+    }
+
+    private static int flashTint(int flashTicks) {
+        if (flashTicks > FLASH_FADE_TICKS) {
+            return EXPANDABLE_TINT;
+        }
+        float greenAmount = (flashTicks - 1) / (float) (FLASH_FADE_TICKS - 1);
+        return interpolateRgb(DEFAULT_TINT, EXPANDABLE_TINT, greenAmount);
+    }
+
+    private static int interpolateRgb(int from, int to, float amount) {
+        int red = Math.round(
+                ((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * amount
+        );
+        int green = Math.round(
+                ((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * amount
+        );
+        int blue = Math.round((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * amount);
+        return (red << 16) | (green << 8) | blue;
+    }
+
+    private static void stageTile(
+            Map<TileKey, DesiredTile> desiredTiles,
+            Edge edge,
+            int y,
+            int tint,
+            ModelStyle style,
+            boolean sessionBoundary
+    ) {
+        if (desiredTiles.size() >= MAX_DISPLAYS) {
+            return;
+        }
+        TileKey key = new TileKey(edge, y, style, sessionBoundary);
+        desiredTiles.putIfAbsent(
+                key, new DesiredTile(edge, y, tint, style, sessionBoundary)
+        );
+    }
+
+    private void reconcile(ClientLevel level, Map<TileKey, DesiredTile> desiredTiles) {
+        Iterator<Map.Entry<TileKey, RenderedTile>> iterator
+                = renderedTiles.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<TileKey, RenderedTile> entry = iterator.next();
+            if (desiredTiles.containsKey(entry.getKey())) {
+                continue;
+            }
+            level.removeEntity(entry.getValue().display.getId(), Entity.RemovalReason.DISCARDED);
+            iterator.remove();
+        }
+
+        for (Map.Entry<TileKey, DesiredTile> entry : desiredTiles.entrySet()) {
+            RenderedTile existing = renderedTiles.get(entry.getKey());
+            if (existing == null) {
+                renderedTiles.put(entry.getKey(), spawn(level, entry.getValue()));
+            } else if (!existing.sessionBoundary) {
+                setTint(existing, entry.getValue().tint());
+            }
+        }
+    }
+
+    private RenderedTile spawn(ClientLevel level, DesiredTile tile) {
         Display.ItemDisplay display = new Display.ItemDisplay(EntityTypes.ITEM_DISPLAY, level);
         display.setId(nextEntityId--);
-        double middle = edge.position() + 0.5D;
+        double middle = tile.edge().position() + 0.5D;
         Quaternionf rotation = new Quaternionf();
-        if (edge.axis() == Axis.X) {
-            display.setPos(middle, y + 0.5D, edge.fixed());
+        if (tile.edge().axis() == Axis.X) {
+            display.setPos(middle, tile.y() + 0.5D, tile.edge().fixed());
         } else {
-            display.setPos(edge.fixed(), y + 0.5D, middle);
+            display.setPos(tile.edge().fixed(), tile.y() + 0.5D, middle);
             rotation.rotateY((float) (Math.PI / 2.0D));
         }
-        display.setItemStack(item(style, tint).copy());
+        display.setItemStack(item(tile.style(), tile.tint()).copy());
         display.setItemTransform(ItemDisplayContext.NONE);
         display.setTransformation(new Transformation(
                 new Vector3f(), rotation, new Vector3f(1.0F), new Quaternionf()
@@ -316,7 +513,22 @@ public final class ClientBoundaryRenderer {
         display.setNoGravity(true);
         display.setInvulnerable(true);
         level.addEntity(display);
-        displayIds.add(display.getId());
+        return new RenderedTile(
+                display,
+                tile.edge(),
+                tile.y(),
+                tile.style(),
+                tile.sessionBoundary(),
+                tile.tint()
+        );
+    }
+
+    private void setTint(RenderedTile tile, int tint) {
+        if (tile.tint == tint) {
+            return;
+        }
+        tile.display.setItemStack(item(tile.style, tint).copy());
+        tile.tint = tint;
     }
 
     private ItemStack item(ModelStyle style, int tint) {
@@ -373,5 +585,43 @@ public final class ClientBoundaryRenderer {
     }
 
     private record TintedModel(ModelStyle style, int tint) {
+    }
+
+    private record TileKey(Edge edge, int y, ModelStyle style, boolean sessionBoundary) {
+    }
+
+    private record DesiredTile(
+            Edge edge,
+            int y,
+            int tint,
+            ModelStyle style,
+            boolean sessionBoundary
+    ) {
+    }
+
+    private static final class RenderedTile {
+
+        private final Display.ItemDisplay display;
+        private final Edge edge;
+        private final int y;
+        private final ModelStyle style;
+        private final boolean sessionBoundary;
+        private int tint;
+
+        private RenderedTile(
+                Display.ItemDisplay display,
+                Edge edge,
+                int y,
+                ModelStyle style,
+                boolean sessionBoundary,
+                int tint
+        ) {
+            this.display = display;
+            this.edge = edge;
+            this.y = y;
+            this.style = style;
+            this.sessionBoundary = sessionBoundary;
+            this.tint = tint;
+        }
     }
 }

@@ -43,6 +43,11 @@ public final class LevelBlockCommands {
                             runtime.lobbies().start(requirePlayer(context.getSource()));
                             success(context.getSource(), "Lobby-Countdown gestartet.");
                         })))
+                .then(Commands.literal("cancel")
+                        .executes(context -> run(context.getSource(), runtimeSupplier, runtime -> {
+                            runtime.lobbies().cancel(requirePlayer(context.getSource()));
+                            warn(context.getSource(), "Lobby abgebrochen.");
+                        })))
                 .then(Commands.literal("stop")
                         .executes(context -> run(context.getSource(), runtimeSupplier, runtime ->
                                 stopOwn(context.getSource(), runtime.sessions())))
@@ -257,7 +262,7 @@ public final class LevelBlockCommands {
     private static void help(CommandSourceStack source) {
         source.sendSystemMessage(Component.literal("LevelBlock Befehle").withStyle(ChatFormatting.GOLD));
         source.sendSystemMessage(Component.literal(
-                "/levelblock lobby | start | stop | invite <spieler> | join [session] | leave | info"
+                "/levelblock lobby | start | cancel | stop | invite <spieler> | join [session] | leave | info"
         ).withStyle(ChatFormatting.GRAY));
         if (isAdmin(source)) {
             source.sendSystemMessage(Component.literal(

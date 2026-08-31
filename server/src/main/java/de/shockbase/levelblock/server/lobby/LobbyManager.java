@@ -80,6 +80,14 @@ public final class LobbyManager {
         syncAll();
     }
 
+    public void cancel(ServerPlayer owner) {
+        Lobby lobby = lobbies.remove(owner.getUUID());
+        if (lobby == null) {
+            throw new IllegalStateException("Du hast keine Lobby.");
+        }
+        syncAll();
+    }
+
     public void tick() {
         List<Lobby> due = lobbies.values().stream()
                 .filter(lobby -> lobby.countdownDue(server.getTickCount()))
@@ -133,13 +141,15 @@ public final class LobbyManager {
         }
 
         WorldProgress progress = session.getWorldProgress(lobby.dimensionId());
+        Vec3 lobbyCenter = new Vec3(
+                lobby.centerX() + 0.5D,
+                owner.position().y,
+                lobby.centerZ() + 0.5D
+        );
+        Vec3 start = safePositions.findNearestAllowed(owner.level(), lobbyCenter, progress);
         for (ServerPlayer participant : participants) {
             showTitle(List.of(participant), Component.literal("LEVELBLOCK").withStyle(ChatFormatting.GREEN));
-            if (ServerDimension.id(participant.level()).equals(lobby.dimensionId())
-                    && !progress.isUnlocked(participant.blockPosition().getX(), participant.blockPosition().getZ())) {
-                Vec3 safe = safePositions.findNearestAllowed(participant.level(), participant.position(), progress);
-                participant.teleportTo(safe.x, safe.y, safe.z);
-            }
+            participant.teleportTo(start.x, start.y, start.z);
             participant.sendSystemMessage(Component.literal(
                     "LevelBlock-Session gestartet: " + session.getId()
             ).withStyle(ChatFormatting.GREEN));
