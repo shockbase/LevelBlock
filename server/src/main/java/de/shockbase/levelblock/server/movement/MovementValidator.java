@@ -11,8 +11,12 @@ import de.shockbase.levelblock.session.WorldProgress;
 import de.shockbase.levelblock.util.MovementCollision;
 import de.shockbase.levelblock.util.MovementPath;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
@@ -94,6 +98,13 @@ public final class MovementValidator {
 
         player.giveExperienceLevels(-approved.cost());
         sessions.unlock(session, progress, approved.columnsToUnlock());
+        player.connection.send(new ClientboundSoundPacket(
+                BuiltInRegistries.SOUND_EVENT.wrapAsHolder(SoundEvents.PLAYER_LEVELUP),
+                SoundSource.MASTER,
+                player.getX(), player.getY(), player.getZ(),
+                1.0F, 1.0F,
+                player.getRandom().nextLong()
+        ));
         player.level().sendParticles(
                 ParticleTypes.HAPPY_VILLAGER,
                 player.getX(), player.getY() + 1.0D, player.getZ(),
