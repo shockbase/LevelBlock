@@ -28,13 +28,13 @@ Die fertigen Dateien befinden sich unter
 
 Für eine Installation immer beide Dateien aus demselben Release verwenden:
 
-- `LevelBlock-Server-1.0.1+mc.26.2.loader.0.19.3.api.0.158.0.jar`
-- `LevelBlock-Client-1.0.1+mc.26.2.loader.0.19.3.api.0.158.0.jar`
+- `LevelBlock-Server-1.0.2+mc.26.2.loader.0.19.3.api.0.158.0.jar`
+- `LevelBlock-Client-1.0.2+mc.26.2.loader.0.19.3.api.0.158.0.jar`
 
 Die Versionsnummer enthält direkt die getestete Zielumgebung:
 
 ```text
-1.0.1+mc.26.2.loader.0.19.3.api.0.158.0
+1.0.2+mc.26.2.loader.0.19.3.api.0.158.0
 │     │       │             └─ Fabric API
 │     │       └─ Fabric Loader
 │     └─ Minecraft
@@ -48,7 +48,7 @@ Loader- und Fabric-API-Version zusammengehören.
 
 | Komponente | Anforderung |
 | --- | --- |
-| LevelBlock | `1.0.1` |
+| LevelBlock | `1.0.2` |
 | Minecraft | `26.2` |
 | Java | `25` |
 | Getesteter Fabric Loader | `0.19.3` |
@@ -347,9 +347,9 @@ veröffentlicht anschließend Server- und Client-JAR:
 
 ```bash
 git tag -a \
-  v1.0.1+mc.26.2.loader.0.19.3.api.0.158.0 \
-  -m "LevelBlock 1.0.1 for Minecraft 26.2"
-git push origin v1.0.1+mc.26.2.loader.0.19.3.api.0.158.0
+  v1.0.2+mc.26.2.loader.0.19.3.api.0.158.0 \
+  -m "LevelBlock 1.0.2 for Minecraft 26.2"
+git push origin v1.0.2+mc.26.2.loader.0.19.3.api.0.158.0
 ```
 
 ### Automatisches Release für neue Fabric-Versionen
