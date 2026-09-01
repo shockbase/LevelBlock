@@ -9,6 +9,8 @@ begehbare Welt säulenweise freigeschaltet wird. Jede neue angrenzende
 X/Z-Säule kostet ein Erfahrungslevel. Fortschritt und freigeschaltete Säulen
 werden für alle Mitglieder einer Session geteilt.
 
+Das Projekt ist von [BastiGHGs **„Level = Block XXL Duo Challenge“**](https://www.youtube.com/watch?v=yahCECwHhzQ) inspiriert:
+
 LevelBlock besteht aus zwei getrennten Dateien:
 
 | Datei | Installationsort | Aufgabe |
