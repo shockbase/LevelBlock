@@ -7,12 +7,14 @@ import de.shockbase.levelblock.network.HelloPayload;
 import de.shockbase.levelblock.network.LobbySyncPayload;
 import de.shockbase.levelblock.network.NetworkProtocol;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 
 public final class LevelBlockClientMod implements ClientModInitializer {
 
@@ -22,6 +24,10 @@ public final class LevelBlockClientMod implements ClientModInitializer {
 
     public static void terrainChanged(ClientLevel level, BlockPos pos) {
         RENDERER.terrainChanged(level, pos);
+    }
+
+    public static void renderBoundary(Vec3 cameraPos) {
+        RENDERER.render(cameraPos);
     }
 
     @Override
@@ -51,6 +57,7 @@ public final class LevelBlockClientMod implements ClientModInitializer {
                     ClientBoundaryState.instance().clear();
                 }
         );
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> RENDERER.close());
         ClientTickEvents.END_CLIENT_TICK.register(RENDERER::tick);
     }
 }

@@ -2,7 +2,7 @@
   "required": true,
   "package": "de.shockbase.levelblock.client.mixin",
   "compatibilityLevel": "JAVA_25",
-  "client": ["ClientLevelMixin", "EntityCollisionMixin"],
+  "client": ["ClientLevelMixin", "EntityCollisionMixin", "WorldBorderRendererMixin"],
   "injectors": {
     "defaultRequire": 1
   }
