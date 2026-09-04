@@ -380,3 +380,8 @@ nicht ungeprüft veröffentlicht.
 Damit automatische Commits und Releases funktionieren, muss das Repository
 unter **Settings → Actions → General → Workflow permissions** Schreibzugriff
 für `GITHUB_TOKEN` erlauben.
+
+## Lizenz
+
+LevelBlock ist unter der [GNU General Public License Version 3](LICENSE)
+(`GPL-3.0-only`) lizenziert.

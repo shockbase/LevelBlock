@@ -5,6 +5,7 @@
   "name": "LevelBlock Server",
   "description": "Serverseitige LevelBlock-Sessions, Fortschritt und Validierung.",
   "authors": ["Shockbase"],
+  "license": "GPL-3.0-only",
   "environment": "server",
   "entrypoints": {
     "main": ["de.shockbase.levelblock.server.LevelBlockServerMod"]
