@@ -2,7 +2,7 @@ import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.jvm.tasks.Jar
 
 plugins {
-    id("net.fabricmc.fabric-loom") version "1.17.20"
+    id("net.fabricmc.fabric-loom") version "1.18.2"
 }
 
 val minecraftVersion = providers.gradleProperty("minecraftVersion").get()
